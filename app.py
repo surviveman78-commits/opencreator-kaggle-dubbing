@@ -166,7 +166,7 @@ def run_dubbing(file_value, url, output_ratio, voice_mode, subtitle_enabled, blu
         primary_color=hex_to_ass(font_color, "&H00FFFFFF"), outline_color=hex_to_ass(outline_color, "&H00000000"),
         outline_width=int(outline_width), default_voice=default_voice, male_voice="my-MM-ThihaNeural",
         female_voice="my-MM-NilarNeural", keep_original_audio=keep_original, original_audio_volume=float(original_volume),
-        translation_provider=("auto" if str(provider).lower().startswith("auto") else str(provider).lower()), speaker_voice_map={},
+        translation_provider=("gemini" if str(provider).lower().startswith("gemini") else ("auto" if str(provider).lower().startswith("auto") else str(provider).lower())), speaker_voice_map={},
     )
     messages = []
     def on_progress(stage, percent, message):
@@ -193,7 +193,7 @@ def build_ui():
                 url = gr.Textbox(label="Or paste public video URL", placeholder="https://...")
                 output_ratio = gr.Radio(["original", "9:16", "16:9"], value="original", label="Output ratio")
                 voice_mode = gr.Radio(["male / သီဟ", "female / နီလာ"], value="male / သီဟ", label="Default voice")
-                provider = gr.Radio(["auto / local-first", "local", "gemini", "groq"], value="auto / local-first", label="Translation backend")
+                provider = gr.Radio(["gemini / batch transcript", "groq", "auto", "local"], value="gemini / batch transcript", label="Translation backend")
                 whisper_model = gr.Dropdown(["tiny", "base", "small", "medium", "large-v3"], value="small", label="Whisper model")
             with gr.Column(scale=1):
                 blur_editor = gr.HTML("<div>Upload a video, then click Preview Box.</div>", label="2. Video preview — drag and resize the blur box")

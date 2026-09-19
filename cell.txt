@@ -6,7 +6,7 @@
 # 3) Internet ကို On လုပ်ပါ။
 # 4) အောက်က cells တွေကို အစဉ်လိုက် run ပါ။
 # 5) နောက်ဆုံး cell ထွက်လာတဲ့ Gradio public URL ကိုဖွင့်ပါ။
-# 6) Local Qwen LLM ကို အရင်သုံးမယ်။ Cloud fallback လိုမှ Gemini/Groq key ကို UI > Open Settings ထဲမှာထည့်ပါ။
+# 6) Gemini API key ကို UI > Open Settings ထဲမှာထည့်ပါ။ Transcript တစ်ခုလုံးကို batch အနည်းငယ်နဲ့ ဘာသာပြန်ပါမယ်။
 
 # =============================
 # CELL 1 — GitHub ကနေ code clone
@@ -48,14 +48,12 @@ print('Project:', APP_DIR)
 %cd $APP_DIR
 !pip install -q -r requirements.txt
 
-# faster-whisper နဲ့ local Qwen translation LLM က CUDA ကိုတွေ့ရင် GPU သုံးမယ်။
-# GPU မတွေ့ရင် CPU fallback သုံးမယ်။ Qwen model ပထမဆုံး run မှာ Hugging Face က download ဖြစ်မယ်။
+# faster-whisper transcription က CUDA ကိုတွေ့ရင် GPU သုံးမယ်။ Translation က Gemini batch API သုံးပါမယ်။
 
 # =============================
 # CELL 5 — UI launch
 # =============================
-# ဒီ project မှာ API key မလိုဘဲ Local LLM နဲ့ စမ်းနိုင်ပါတယ်။
-# Cloud fallback သုံးချင်မှ App ဖွင့်ပြီး ⚙ Open Settings ထဲကနေ key ထည့်ပါ။
+# App ဖွင့်ပြီး ⚙ Open Settings ထဲမှာ Gemini API key ထည့်ပြီး Save keys နှိပ်ပါ။
 %cd $APP_DIR
 !python app.py
 
@@ -67,7 +65,7 @@ print('Project:', APP_DIR)
 # 3) Video ပေါ်က Liquid Glass blur box ကို လက်နဲ့ drag လုပ်ပါ။
 # 4) အောက်ညာဘက် glass handle နဲ့ ချုံ့/ချဲ့ပါ။
 # 5) ⚙ Open Settings ထဲမှာ Gemini/Groq key, custom font, subtitle color ရွေးပါ။
-# 6) Start Burmese Dubbing နှိပ်ပါ။
+# 6) Translation backend မှာ "gemini / batch transcript" ထားပြီး Start Burmese Dubbing နှိပ်ပါ။
 # 7) Output video, dubbed audio, ASS subtitle, segments JSON ကို download လုပ်ပါ။
 #
 # Final output video မှာ preview UI ရဲ့ glass border/handle/label မပါပါ။

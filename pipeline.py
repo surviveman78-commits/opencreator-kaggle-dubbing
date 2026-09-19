@@ -55,7 +55,7 @@ class DubbingConfig:
     keep_original_audio: bool = True
     original_audio_volume: float = 0.15
     max_duration_seconds: int = 900
-    translation_provider: str = "auto"
+    translation_provider: str = "gemini"
     local_translation_model: str = "Qwen/Qwen2.5-7B-Instruct"
     speaker_voice_map: dict[str, str] = field(default_factory=dict)
 
@@ -256,8 +256,49 @@ class DubbingPipeline:
             raise PipelineError(f"Local LLM translation failed before cloud fallback: {local_error}") from local_error
         raise PipelineError("No translation backend available. Choose Local LLM or set a Gemini/Groq key in Settings.")
 
+    def translate_gemini_batch(self, segments: list[Segment], job: Path, config: DubbingConfig) -> list[Segment]:
+        """Translate the transcript in a small number of Gemini requests, not one request per segment."""
+        if not os.getenv("GEMINI_API_KEY"):
+            raise PipelineError("Gemini API key is required. Open Settings, paste the key, and click Save keys.")
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise PipelineError("google-genai is not installed. Run the Kaggle requirements cell first.") from exc
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        batch_size = 40
+        for offset in range(0, len(segments), batch_size):
+            batch = segments[offset:offset + batch_size]
+            numbered = "\n".join(f"{i + 1}. {seg.source_text}" for i, seg in enumerate(batch))
+            prompt = (
+                "Translate each numbered Chinese subtitle line into natural spoken Burmese. "
+                "Keep exactly the same number and order of lines. Return ONLY a valid JSON array "
+                "of strings, with no markdown fences or explanations. Preserve names and meaning; "
+                "keep each line concise for its original timestamp.\n\n" + numbered
+            )
+            self._emit("translating", 40 + int(10 * min(offset + len(batch), len(segments)) / len(segments)), f"Gemini translating transcript batch {offset + 1}-{offset + len(batch)} / {len(segments)}")
+            try:
+                response = client.models.generate_content(model=model_name, contents=prompt)
+                raw = (response.text or "").strip()
+                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE).strip()
+                translated = json.loads(raw)
+                if not isinstance(translated, list) or len(translated) != len(batch):
+                    raise ValueError(f"Gemini returned {len(translated) if isinstance(translated, list) else 'non-list'} lines for {len(batch)} input lines")
+                for segment, text in zip(batch, translated):
+                    segment.translated_text = str(text).strip()
+                    if not segment.translated_text:
+                        raise ValueError("Gemini returned an empty translation line")
+            except Exception as exc:
+                raise PipelineError(f"Gemini batch translation failed: {exc}") from exc
+        self.save_segments(job, segments)
+        (job / "meta" / "transcript.txt").write_text("\n".join(s.source_text for s in segments), encoding="utf-8")
+        return segments
+
     def translate(self, segments: list[Segment], job: Path, config: DubbingConfig) -> list[Segment]:
         self._emit("translating", 38, "Translating Chinese dialogue into Burmese")
+        provider = (config.translation_provider or "gemini").lower()
+        if provider == "gemini":
+            return self.translate_gemini_batch(segments, job, config)
         for index, segment in enumerate(segments):
             segment.translated_text = self.translate_segment(segment.source_text, config)
             self._emit("translating", 38 + int(12 * (index + 1) / len(segments)), f"Translated {index + 1}/{len(segments)} segments")

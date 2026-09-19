@@ -5,7 +5,8 @@ requests>=2.32.0
 Pillow>=10.0.0
 numpy>=1.26.0
 google-genai>=1.0.0
-transformers>=4.45.0
-accelerate>=0.34.0
-bitsandbytes>=0.43.0
-sentencepiece>=0.2.0
+# Optional only if the UI provider is set to local:
+# transformers>=4.45.0
+# accelerate>=0.34.0
+# bitsandbytes>=0.43.0
+# sentencepiece>=0.2.0

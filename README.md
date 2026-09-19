@@ -6,7 +6,7 @@ This is a Kaggle-friendly personal-use MVP inspired by OpenCreator's staged crea
 
 - Accepts a local video upload or a public video URL.
 - Extracts audio and transcribes Chinese speech with `faster-whisper`.
-- Translates each segment to Burmese with a local Qwen instruct LLM first; Gemini/Groq are optional fallbacks.
+- Extracts a transcript first, then translates numbered transcript batches with Gemini instead of making one API call per segment.
 - Generates Burmese speech through Microsoft Edge voices `my-MM-ThihaNeural` (သီဟ) and `my-MM-NilarNeural` (နီလာ).
 - Aligns each generated segment to the original timestamps.
 - Renders Burmese ASS subtitles.
@@ -37,9 +37,11 @@ After uploading a video, click **Preview Box**. The app creates a short looping 
 
 ## Translation architecture and API keys
 
-The default `auto / local-first` mode loads `Qwen/Qwen2.5-7B-Instruct` with 4-bit bitsandbytes quantization when CUDA is available. On a Kaggle T4 GPU this is intended to run locally and does not require a translation API key. The first run downloads the model from Hugging Face, so Kaggle Internet must be enabled. The UI also exposes `local`, `gemini`, and `groq` provider choices.
+The default `gemini / batch transcript` mode sends numbered transcript batches to Gemini, which is much faster than running a local 7B model once for every subtitle segment. The UI also exposes `groq`, `auto`, and `local` provider choices for experimentation.
 
-API keys are intentionally not required in the notebook cells. If you want a cloud fallback, open the running app's **Open Settings** section and paste a Gemini or Groq key. The key is stored only in the running Python process for that Kaggle session and is not written to the repository.
+API keys are intentionally not required in the notebook cells. Open the running app's **Open Settings** section, paste the Gemini key, and click **Save keys**. The key is stored only in the running Python process for that Kaggle session and is not written to the repository.
+
+The audio path is timestamp-preserving: the source video is converted to mono 16 kHz audio, Whisper creates timed Chinese segments, Gemini returns one Burmese line per segment, Edge TTS creates a voice clip for each line, and FFmpeg delays/mixes each clip at its original segment start time before rendering the final MP4.
 
 ```python
 # API keys are entered in the UI, not in this file.
