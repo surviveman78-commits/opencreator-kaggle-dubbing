@@ -1,0 +1,75 @@
+# OpenCreator Personal Burmese Dubbing — Kaggle Cells
+#
+# GitHub workflow:
+# 1) ဒီ project folder ကို GitHub repository ထဲ push လုပ်ပါ။
+# 2) Kaggle Notebook > Settings > Accelerator မှာ GPU (T4/P100) ရွေးပါ။
+# 3) Internet ကို On လုပ်ပါ။
+# 4) အောက်က cells တွေကို အစဉ်လိုက် run ပါ။
+# 5) နောက်ဆုံး cell ထွက်လာတဲ့ Gradio public URL ကိုဖွင့်ပါ။
+# 6) Gemini/Groq key ကို code/cell ထဲမထည့်ဘဲ UI > Open Settings ထဲမှာထည့်ပါ။
+
+# =============================
+# CELL 1 — GitHub ကနေ code clone
+# =============================
+from pathlib import Path
+import os
+
+REPO_URL = "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git"
+BRANCH = "main"
+APP_DIR = Path('/kaggle/working/opencreator-kaggle-dubbing')
+
+# YOUR_GITHUB_USERNAME/YOUR_REPO_NAME ကို ကိုယ့် GitHub URL နဲ့ပြောင်းပါ။
+# ဥပမာ: https://github.com/myname/opencreator-kaggle-dubbing.git
+if not APP_DIR.exists():
+    !git clone --depth 1 --branch $BRANCH $REPO_URL $APP_DIR
+else:
+    print('Project folder already exists:', APP_DIR)
+
+assert (APP_DIR / 'app.py').exists(), 'GitHub repo ထဲမှာ app.py မတွေ့ပါ။'
+print('Project:', APP_DIR)
+
+# =============================
+# CELL 2 — Kaggle GPU/CUDA စစ်ဆေး
+# =============================
+!nvidia-smi
+
+# ဒီ cell က GPU မရှိရင် error ဖြစ်နိုင်ပါတယ်။
+# Kaggle Notebook Settings မှာ Accelerator = GPU ရွေးထားကြောင်း စစ်ပါ။
+
+# =============================
+# CELL 3 — FFmpeg နဲ့ font packages
+# =============================
+!apt-get update -qq
+!apt-get install -y -qq ffmpeg fonts-noto-core fonts-noto-extra
+!ffmpeg -version | head -1
+
+# =============================
+# CELL 4 — Python models/packages install
+# =============================
+%cd $APP_DIR
+!pip install -q -r requirements.txt
+
+# faster-whisper က CUDA ကိုတွေ့ရင် pipeline.py ထဲမှာ automatically GPU/float16 သုံးမယ်။
+# GPU မတွေ့ရင် CPU/int8 fallback သုံးမယ်။
+
+# =============================
+# CELL 5 — UI launch
+# =============================
+# ဒီ project မှာ API key တွေကို cell ထဲ မထည့်ပါ။
+# App ဖွင့်ပြီး ⚙ Open Settings ထဲကနေ session အတွင်း ထည့်ပါ။
+%cd $APP_DIR
+!python app.py
+
+# =============================
+# UI အသုံးပြုပုံ
+# =============================
+# 1) Video upload သို့မဟုတ် public video URL ထည့်ပါ။
+# 2) Preview Box နှိပ်ပါ။
+# 3) Video ပေါ်က Liquid Glass blur box ကို လက်နဲ့ drag လုပ်ပါ။
+# 4) အောက်ညာဘက် glass handle နဲ့ ချုံ့/ချဲ့ပါ။
+# 5) ⚙ Open Settings ထဲမှာ Gemini/Groq key, custom font, subtitle color ရွေးပါ။
+# 6) Start Burmese Dubbing နှိပ်ပါ။
+# 7) Output video, dubbed audio, ASS subtitle, segments JSON ကို download လုပ်ပါ။
+#
+# Final output video မှာ preview UI ရဲ့ glass border/handle/label မပါပါ။
+# User သတ်မှတ်ထားတဲ့ fixed blur rectangle နေရာမှာပဲ FFmpeg blur ထည့်ပါမယ်။
