@@ -56,7 +56,7 @@ class DubbingConfig:
     original_audio_volume: float = 0.15
     max_duration_seconds: int = 900
     translation_provider: str = "auto"
-    local_translation_model: str = ""
+    local_translation_model: str = "Qwen/Qwen2.5-7B-Instruct"
     speaker_voice_map: dict[str, str] = field(default_factory=dict)
 
 
@@ -71,6 +71,8 @@ class DubbingPipeline:
         self.root = Path(work_root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.progress = progress or (lambda stage, percent, message: None)
+        self._local_tokenizer = None
+        self._local_model = None
 
     def _emit(self, stage: str, percent: int, message: str) -> None:
         self.progress(stage, percent, message)
@@ -164,8 +166,64 @@ class DubbingPipeline:
         self.save_segments(job, segments)
         return segments
 
+    def _load_local_translator(self, config: DubbingConfig):
+        if self._local_model is not None and self._local_tokenizer is not None:
+            return self._local_tokenizer, self._local_model
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        except ImportError as exc:
+            raise PipelineError("Local LLM packages are missing. Install transformers, accelerate, and bitsandbytes from requirements.txt.") from exc
+        model_id = config.local_translation_model or os.getenv("LOCAL_TRANSLATION_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        self._emit("translating", 38, f"Loading local translation LLM: {model_id}")
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        kwargs = {"device_map": "auto", "trust_remote_code": True}
+        if self.cuda_available():
+            kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True)
+        else:
+            kwargs["torch_dtype"] = torch.float32
+        try:
+            model = AutoModelForCausalLM.from_pretrained(model_id, **kwargs)
+        except Exception as exc:
+            raise PipelineError(f"Could not load local LLM {model_id}. Confirm Kaggle Internet/GPU is enabled and the model can fit in memory: {exc}") from exc
+        model.eval()
+        self._local_tokenizer, self._local_model = tokenizer, model
+        return tokenizer, model
+
+    def translate_local(self, text: str, config: DubbingConfig) -> str:
+        import torch
+        tokenizer, model = self._load_local_translator(config)
+        messages = [
+            {"role": "system", "content": "You are a professional Chinese-to-Burmese subtitle translator. Return only natural spoken Burmese. Preserve names and meaning. Keep the translation concise enough to fit the original timestamp."},
+            {"role": "user", "content": text},
+        ]
+        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = tokenizer(prompt, return_tensors="pt")
+        try:
+            device = next(model.parameters()).device
+            inputs = {key: value.to(device) for key, value in inputs.items()}
+            with torch.inference_mode():
+                output = model.generate(**inputs, max_new_tokens=256, do_sample=False, temperature=0.0, pad_token_id=tokenizer.eos_token_id)
+            generated = output[0][inputs["input_ids"].shape[-1]:]
+            result = tokenizer.decode(generated, skip_special_tokens=True).strip()
+            if not result:
+                raise PipelineError("Local LLM returned an empty Burmese translation.")
+            return result
+        except PipelineError:
+            raise
+        except Exception as exc:
+            raise PipelineError(f"Local LLM generation failed: {exc}") from exc
+
     def translate_segment(self, text: str, config: DubbingConfig) -> str:
         provider = (config.translation_provider or "auto").lower()
+        local_error = None
+        if provider in ("local", "auto"):
+            try:
+                return self.translate_local(text, config)
+            except Exception as exc:
+                local_error = exc
+                if provider == "local":
+                    raise
         if provider in ("auto", "gemini") and os.getenv("GEMINI_API_KEY"):
             try:
                 from google import genai
@@ -194,7 +252,9 @@ class DubbingPipeline:
             except Exception:
                 if provider == "groq":
                     raise
-        raise PipelineError("No translation backend available. Set GEMINI_API_KEY/GROQ_API_KEY or add a local translator adapter.")
+        if local_error is not None and provider == "auto":
+            raise PipelineError(f"Local LLM translation failed before cloud fallback: {local_error}") from local_error
+        raise PipelineError("No translation backend available. Choose Local LLM or set a Gemini/Groq key in Settings.")
 
     def translate(self, segments: list[Segment], job: Path, config: DubbingConfig) -> list[Segment]:
         self._emit("translating", 38, "Translating Chinese dialogue into Burmese")

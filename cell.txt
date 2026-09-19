@@ -6,7 +6,7 @@
 # 3) Internet ကို On လုပ်ပါ။
 # 4) အောက်က cells တွေကို အစဉ်လိုက် run ပါ။
 # 5) နောက်ဆုံး cell ထွက်လာတဲ့ Gradio public URL ကိုဖွင့်ပါ။
-# 6) Gemini/Groq key ကို code/cell ထဲမထည့်ဘဲ UI > Open Settings ထဲမှာထည့်ပါ။
+# 6) Local Qwen LLM ကို အရင်သုံးမယ်။ Cloud fallback လိုမှ Gemini/Groq key ကို UI > Open Settings ထဲမှာထည့်ပါ။
 
 # =============================
 # CELL 1 — GitHub ကနေ code clone
@@ -14,12 +14,11 @@
 from pathlib import Path
 import os
 
-REPO_URL = "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git"
+REPO_URL = "https://github.com/surviveman78-commits/opencreator-kaggle-dubbing.git"
 BRANCH = "main"
 APP_DIR = Path('/kaggle/working/opencreator-kaggle-dubbing')
 
-# YOUR_GITHUB_USERNAME/YOUR_REPO_NAME ကို ကိုယ့် GitHub URL နဲ့ပြောင်းပါ။
-# ဥပမာ: https://github.com/myname/opencreator-kaggle-dubbing.git
+# ဒီ repo URL က user ရဲ့ public GitHub repository ဖြစ်ပါတယ်။
 if not APP_DIR.exists():
     !git clone --depth 1 --branch $BRANCH $REPO_URL $APP_DIR
 else:
@@ -49,14 +48,14 @@ print('Project:', APP_DIR)
 %cd $APP_DIR
 !pip install -q -r requirements.txt
 
-# faster-whisper က CUDA ကိုတွေ့ရင် pipeline.py ထဲမှာ automatically GPU/float16 သုံးမယ်။
-# GPU မတွေ့ရင် CPU/int8 fallback သုံးမယ်။
+# faster-whisper နဲ့ local Qwen translation LLM က CUDA ကိုတွေ့ရင် GPU သုံးမယ်။
+# GPU မတွေ့ရင် CPU fallback သုံးမယ်။ Qwen model ပထမဆုံး run မှာ Hugging Face က download ဖြစ်မယ်။
 
 # =============================
 # CELL 5 — UI launch
 # =============================
-# ဒီ project မှာ API key တွေကို cell ထဲ မထည့်ပါ။
-# App ဖွင့်ပြီး ⚙ Open Settings ထဲကနေ session အတွင်း ထည့်ပါ။
+# ဒီ project မှာ API key မလိုဘဲ Local LLM နဲ့ စမ်းနိုင်ပါတယ်။
+# Cloud fallback သုံးချင်မှ App ဖွင့်ပြီး ⚙ Open Settings ထဲကနေ key ထည့်ပါ။
 %cd $APP_DIR
 !python app.py
 
