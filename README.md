@@ -49,7 +49,9 @@ The default `gemini / batch transcript` mode sends numbered transcript batches t
 
 API keys are intentionally not required in the notebook cells. Open the running app's **Open Settings** section, paste the Gemini key, and click **Save keys**. The key is stored only in the running Python process for that Kaggle session and is not written to the repository.
 
-The audio path is timestamp-preserving: the source video is converted to mono 16 kHz audio, Whisper creates timed Chinese segments, Gemini returns one Burmese line per segment, local F5 TTS creates voice clips, and CUDA/FFmpeg delays and mixes each clip at its original segment start time before rendering the final MP4. The renderer does not downscale the original video; it keeps its original resolution and aspect ratio.
+The audio path is timestamp-preserving: the source video is converted to mono 16 kHz audio, Whisper creates timed Chinese segments, a local foreground-speaker gate keeps the dominant voice group and drops secondary/background segments when confidence is sufficient, Gemini returns one Burmese line per retained segment, and Edge TTS generates the Burmese voice clips. Male foreground speech uses **my-MM-ThihaNeural** and female foreground speech uses **my-MM-NilarNeural**. The original voice track is not mixed into the final output, so background speakers are not carried through as original audio. CUDA/FFmpeg delays and mixes each Edge TTS clip at its original segment start time before rendering the final MP4. The renderer does not downscale the original video; it keeps its original resolution and aspect ratio.
+
+The foreground gate is a lightweight local energy/pitch grouping, not full neural speaker diarization. It is effective when the front speaker is clearly dominant, but overlapping speakers with very similar voice characteristics may require a dedicated diarization/source-separation model.
 
 ```python
 # API keys are entered in the UI, not in this file.

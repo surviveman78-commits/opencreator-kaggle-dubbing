@@ -1,6 +1,7 @@
 OpenCreator Personal Burmese Dubbing
-Version: gradio-share-v4
+Version: gradio-share-v5-foreground-edge
 Required launcher: app.py
 Public link: Gradio share=True -> https://<random-name>.gradio.live
-Refresh behavior: latest completed output is restored from opencreator_runtime/job-*/
-Do not launch custom_ui.py for Kaggle use.
+Audio routing: foreground speaker gate; male -> my-MM-ThihaNeural; female -> my-MM-NilarNeural
+TTS: Edge TTS
+Original voice track: disabled in final output

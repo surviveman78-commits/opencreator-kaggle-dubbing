@@ -165,9 +165,9 @@ def run_dubbing(file_value, url, output_ratio, voice_mode, subtitle_enabled, blu
         font_path=font_path or "", font_name=font_name or "Noto Sans Myanmar", font_size=int(font_size),
         primary_color=hex_to_ass(font_color, "&H00FFFFFF"), outline_color=hex_to_ass(outline_color, "&H00000000"),
         outline_width=int(outline_width), default_voice=default_voice, male_voice="my-MM-ThihaNeural",
-        female_voice="my-MM-NilarNeural", keep_original_audio=keep_original, original_audio_volume=float(original_volume),
+        female_voice="my-MM-NilarNeural", keep_original_audio=False, original_audio_volume=0.0,
         translation_provider=("gemini" if str(provider).lower().startswith("gemini") else ("auto" if str(provider).lower().startswith("auto") else str(provider).lower())), speaker_voice_map={},
-        tts_backend="local_f5", male_reference_audio=get_video_path(male_reference_audio) or "", female_reference_audio=get_video_path(female_reference_audio) or "",
+        tts_backend="edge", male_reference_audio=get_video_path(male_reference_audio) or "", female_reference_audio=get_video_path(female_reference_audio) or "",
         male_reference_text=male_reference_text or "", female_reference_text=female_reference_text or "",
     )
     messages = []
@@ -232,7 +232,7 @@ def build_ui():
             with gr.Row():
                 subtitle_enabled = gr.Checkbox(value=True, label="Add Burmese subtitles")
                 blur_enabled = gr.Checkbox(value=True, label="Blur original subtitle")
-                keep_original = gr.Checkbox(value=True, label="Keep original BGM/SFX softly")
+                keep_original = gr.Checkbox(value=False, label="Keep original BGM/SFX softly", visible=False)
             with gr.Row():
                 font_file = gr.File(label="Custom .ttf/.otf font", file_types=[".ttf", ".otf"], type="filepath")
                 font_name = gr.Textbox(value="Noto Sans Myanmar", label="Font family name")
@@ -242,13 +242,13 @@ def build_ui():
                 outline_color = gr.ColorPicker(value="#000000", label="Outline color")
                 outline_width = gr.Slider(0, 12, value=3, step=1, label="Outline width")
                 original_volume = gr.Slider(0, 0.5, value=0.15, step=0.01, label="Original audio volume")
-            gr.Markdown("### Optional local F5 voice references")
+            gr.Markdown("Voice routing is automatic: foreground male → Thiha, foreground female → Nilar. Original voice track is removed from the final output; Edge TTS is used.")
             with gr.Row():
-                male_reference_audio = gr.File(label="Male reference audio", file_types=[".wav", ".mp3", ".m4a"], type="filepath")
-                female_reference_audio = gr.File(label="Female reference audio", file_types=[".wav", ".mp3", ".m4a"], type="filepath")
+                male_reference_audio = gr.File(label="Male reference audio (disabled; automatic foreground routing)", file_types=[".wav", ".mp3", ".m4a"], type="filepath", visible=False)
+                female_reference_audio = gr.File(label="Female reference audio (disabled; automatic foreground routing)", file_types=[".wav", ".mp3", ".m4a"], type="filepath", visible=False)
             with gr.Row():
-                male_reference_text = gr.Textbox(label="Male reference transcript", placeholder="Exact Burmese words in the male reference audio")
-                female_reference_text = gr.Textbox(label="Female reference transcript", placeholder="Exact Burmese words in the female reference audio")
+                male_reference_text = gr.Textbox(label="Male reference transcript", visible=False)
+                female_reference_text = gr.Textbox(label="Female reference transcript", visible=False)
         run_btn = gr.Button("3. Start Burmese Dubbing", variant="primary")
         with gr.Row():
             output_video = gr.Video(label="Burmese dubbed video")

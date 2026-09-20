@@ -52,12 +52,12 @@ class DubbingConfig:
     default_voice: str = "my-MM-ThihaNeural"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
-    tts_backend: str = "local_f5"
+    tts_backend: str = "edge"
     male_reference_audio: str = ""
     female_reference_audio: str = ""
     male_reference_text: str = ""
     female_reference_text: str = ""
-    keep_original_audio: bool = True
+    keep_original_audio: bool = False
     original_audio_volume: float = 0.15
     max_duration_seconds: int = 900
     translation_provider: str = "gemini"
@@ -182,8 +182,77 @@ class DubbingPipeline:
         if not segments:
             raise PipelineError("No speech was detected in the video.")
         self.assign_voice_by_pitch(audio, segments)
+        segments = self.select_foreground_speaker(audio, segments, job)
         self.save_segments(job, segments)
         return segments
+
+    def select_foreground_speaker(self, audio: Path, segments: list[Segment], job: Path | None = None) -> list[Segment]:
+        """Keep the dominant foreground voice and drop secondary/background speakers.
+
+        This is a local, token-free foreground-speaker gate. It scores each estimated
+        gender/pitch group by voiced duration and RMS energy, then keeps only the
+        strongest group. It is intentionally conservative: if confidence is too low,
+        it keeps the transcript instead of deleting dialogue.
+        """
+        if len(segments) < 2:
+            return segments
+        try:
+            import numpy as np
+            try:
+                import soundfile as sf
+                samples, rate = sf.read(str(audio), dtype='float32')
+                if getattr(samples, 'ndim', 1) > 1:
+                    samples = samples.mean(axis=1)
+            except ImportError:
+                import wave
+                with wave.open(str(audio), 'rb') as wav:
+                    rate=wav.getframerate(); channels=wav.getnchannels(); width=wav.getsampwidth()
+                    raw=wav.readframes(wav.getnframes())
+                if width != 2:
+                    raise PipelineError('Foreground speaker analysis needs 16-bit PCM WAV audio')
+                samples=np.frombuffer(raw, dtype=np.int16).astype('float32')/32768.0
+                if channels > 1:
+                    samples=samples.reshape(-1, channels).mean(axis=1)
+            groups = {}
+            for seg in segments:
+                a=max(0, int(seg.start*rate)); b=min(len(samples), int(seg.end*rate))
+                clip=samples[a:b]
+                if len(clip) < max(800, rate//10):
+                    continue
+                rms=float(np.sqrt(np.mean(np.square(clip))))
+                # Ignore near-silence and retain gender as the lightweight speaker key.
+                if rms < 0.008:
+                    continue
+                key=seg.gender if seg.gender in ('male','female') else 'unknown'
+                item=groups.setdefault(key, {'duration':0.0,'energy':0.0,'segments':[]})
+                dur=max(0.05, seg.end-seg.start)
+                item['duration'] += dur
+                item['energy'] += rms*dur
+                item['segments'].append(seg)
+            usable={k:v for k,v in groups.items() if v['segments']}
+            if len(usable) <= 1:
+                return segments
+            ranked=sorted(usable.items(), key=lambda kv: (kv[1]['energy']*0.7 + kv[1]['duration']*0.3), reverse=True)
+            winner, best=ranked[0]
+            second=ranked[1][1]
+            # Require a meaningful dominance margin; otherwise do not delete dialogue.
+            best_score=best['energy']*0.7 + best['duration']*0.3
+            second_score=second['energy']*0.7 + second['duration']*0.3
+            if best_score < second_score*1.12:
+                self._emit('speaker', 29, 'Foreground speaker confidence low; keeping all detected dialogue')
+                return segments
+            kept=sorted(best['segments'], key=lambda x:x.start)
+            for seg in kept:
+                seg.speaker='foreground'
+                seg.voice='my-MM-NilarNeural' if winner=='female' else 'my-MM-ThihaNeural'
+            dropped=len(segments)-len(kept)
+            self._emit('speaker', 30, f'Foreground speaker selected: {winner}; dropped {dropped} secondary/background segments')
+            if job:
+                (job/'meta'/'speaker-selection.json').write_text(json.dumps({'selected_group':winner,'dropped_segments':dropped,'scores':{k:{'duration':v['duration'],'energy':v['energy']} for k,v in usable.items()}}, ensure_ascii=False, indent=2), encoding='utf-8')
+            return kept
+        except Exception as exc:
+            self._emit('speaker', 30, f'Foreground-speaker filter unavailable; keeping transcript ({exc})')
+            return segments
 
     def assign_voice_by_pitch(self, audio: Path, segments: list[Segment]) -> None:
         """Fast heuristic routing: lower pitch -> Thiha, higher pitch -> Nilar.
