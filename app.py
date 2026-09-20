@@ -184,6 +184,23 @@ def run_dubbing(file_value, url, output_ratio, voice_mode, subtitle_enabled, blu
     return result["output"], result["audio"], result["subtitle"], result["segments"], "\n".join(messages)
 
 
+def restore_last_result():
+    jobs=sorted(RUNTIME.glob('job-*/renders/burmese-dubbed.mp4'), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not jobs:
+        return None, None, None, None, 'No completed output to restore after refresh.'
+    output=jobs[0]
+    job=output.parent.parent
+    source=job / 'input.mp4'
+    audio=job / 'renders' / 'dubbed-audio.m4a'
+    subtitle=job / 'renders' / 'burmese.ass'
+    segments=job / 'meta' / 'segments.json'
+    return (str(source) if source.exists() else None,
+            str(output),
+            str(audio) if audio.exists() else None,
+            str(subtitle) if subtitle.exists() else None,
+            'Restored latest completed job after refresh: ' + output.name)
+
+
 def build_ui():
     css = ".oc-title{text-align:center}.oc-note{border:1px solid #d9d9e3;border-radius:12px;padding:12px}.oc-drag-help{font-size:13px;color:#555}"
     with gr.Blocks(title="OpenCreator Personal Burmese Dubbing", css=css, js=BLUR_EDITOR_JS) as demo:
@@ -243,6 +260,7 @@ def build_ui():
         preview_btn.click(frame_preview, [video, blur_coordinates, blur_strength], [blur_editor, preview_note])
         save_keys.click(save_api_keys, [gemini_key, groq_key], [key_status])
         run_btn.click(run_dubbing, [video, url, output_ratio, voice_mode, subtitle_enabled, blur_enabled, blur_coordinates, blur_strength, font_file, font_name, font_size, font_color, outline_color, outline_width, keep_original, original_volume, provider, whisper_model, male_reference_audio, female_reference_audio, male_reference_text, female_reference_text], [output_video, output_audio, output_subtitle, output_segments, logs])
+        demo.load(restore_last_result, outputs=[video, output_video, output_audio, output_subtitle, logs])
     return demo
 
 

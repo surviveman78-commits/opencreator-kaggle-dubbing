@@ -22,26 +22,26 @@ In Kaggle Notebook Settings, select a GPU accelerator such as T4/P100 and enable
 
 In a Kaggle notebook cell:
 
-The copy/paste-ready GitHub clone, GPU check, FFmpeg install, Python dependency install, and launch cells are in [`cell.txt`](cell.txt). The launcher runs `custom_ui.py`, which downloads/loads Whisper and F5 TTS before the web page opens. It also starts a Cloudflare Quick Tunnel and prints the external `https://*.trycloudflare.com` URL. Do not use the Flask internal `127.0.0.1:7860` or `172.x.x.x:7860` addresses, and do not launch the old `app.py` entrypoint for this custom UI.
+The copy/paste-ready GitHub clone, GPU check, FFmpeg install, Python dependency install, and launch cells are in [`cell.txt`](cell.txt). The official launcher is `app.py`; it starts the Gradio UI with `share=True` and prints a temporary `https://xxxxx.gradio.live` public URL. Use that Gradio URL while the Kaggle process remains alive. The old Cloudflare/Flask `custom_ui.py` launcher is not the official path now.
 
-This package is **custom-ui-public-link-v2**. Confirm the correct GitHub copy with `VERSION.txt` and `PUBLIC_LINK_SETUP.md`, or search `custom_ui.py` for `start_public_tunnel`, `trycloudflare.com`, and `PUBLIC LINK (open this URL)`.
+This package uses the **Gradio share launcher**. Confirm the correct GitHub copy by checking that `app.py` contains `launch(share=True)` and `restore_last_result`.
 
-The main interface is a custom Flask HTML/CSS/JavaScript UI, not the Gradio layout. It provides the video preview, Liquid Glass drag/resize blur box, session Gemini key field, male/female reference audio fields, progress bar, and final MP4 download.
+The main interface is the Gradio UI in `app.py`. It provides the video preview, Liquid Glass drag/resize blur box, session Gemini key field, font controls, progress log, and final MP4 download.
 
 Subtitle font behavior is explicit: when no font is uploaded, the renderer and preview use **Noto Sans Myanmar**. When a `.ttf` or `.otf` file is uploaded, it is loaded into the preview and becomes selectable in the font dropdown; the selected font is sent to the final render.
 
-Copy the files into `/kaggle/working/opencreator-kaggle-dubbing/`, then run the custom launcher:
+Copy the files into `/kaggle/working/opencreator-kaggle-dubbing/`, then run the Gradio launcher:
 
 ```python
 %cd /kaggle/working/opencreator-kaggle-dubbing
-!python custom_ui.py
+!python app.py
 ```
 
-The launcher prints a temporary Cloudflare Quick Tunnel URL. Open the `https://*.trycloudflare.com` URL, not the internal Flask addresses. It only works while the Kaggle session remains alive. Do not share the link for personal-use data.
+The launcher prints a temporary Gradio URL such as `https://xxxxx.gradio.live`. It only works while the Kaggle process remains alive. Do not share the link for personal-use data.
 
 After uploading a video, click **Preview Box**. The app creates a short looping video preview, not a static image. Drag the red rectangle over the original subtitle and resize it from the bottom-right handle. There are no visible X/Y/Width/Height controls; the editor keeps the coordinates as hidden state. Open **Settings** to paste a Gemini or Groq key for this session; keys are kept only in the running Python process. Use the color pickers to select subtitle and outline colors.
 
-Job metadata is saved under `opencreator_runtime/jobs.json`. Refreshing the browser restores the most recent uploaded video, blur coordinates, progress state, and completed output preview when the runtime folder is still present. If the Kaggle process itself restarts, an in-progress job is marked as interrupted rather than shown as falsely running.
+Completed job artifacts are saved under `opencreator_runtime/job-*/`. Refreshing the Gradio page restores the latest completed input video, dubbed output video, audio, subtitle file, and workflow log when the runtime folder is still present. Gradio's in-memory controls reset on refresh, but the completed result is restored from disk.
 
 ## Translation architecture and API keys
 
@@ -68,7 +68,8 @@ Edge TTS is an online service, not an offline local model. Internet access is re
 ## Files
 
 - `pipeline.py` — staged workflow, state artifacts, FFmpeg rendering, TTS, translation adapters.
-- `app.py` — temporary Gradio UI with upload/link input, blur-box settings, font settings, preview, output download.
+- `app.py` — official Gradio UI with upload/link input, blur-box settings, font settings, preview, output download, and latest-output restoration after refresh.
 - `kaggle_setup.py` — optional Python bootstrap script for Kaggle.
 - `cell.txt` — copy/paste-ready Kaggle notebook cells for extraction, package installation, secrets, and launch.
+- `custom_ui.py` — legacy Flask/Cloudflare prototype; not used by the official Kaggle launcher.
 - `requirements.txt` — Python dependencies.

@@ -1,13 +1,6 @@
 OpenCreator Personal Burmese Dubbing
-Version: custom-ui-public-link-v2
-Required launcher: custom_ui.py
-Public link: cloudflared Quick Tunnel -> https://*.trycloudflare.com
-Do not launch app.py for the custom public UI.
-Do not use 127.0.0.1 or 172.x.x.x as the external URL.
-
-Verification markers in custom_ui.py:
-- start_public_tunnel
-- trycloudflare.com
-- PUBLIC LINK (open this URL)
-
-This file is intentionally included so the GitHub upload can be checked against the old package.
+Version: gradio-share-v4
+Required launcher: app.py
+Public link: Gradio share=True -> https://<random-name>.gradio.live
+Refresh behavior: latest completed output is restored from opencreator_runtime/job-*/
+Do not launch custom_ui.py for Kaggle use.

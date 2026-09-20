@@ -5,7 +5,7 @@
 # 2) Kaggle Notebook > Settings > Accelerator မှာ GPU (T4/P100) ရွေးပါ။
 # 3) Internet ကို On လုပ်ပါ။
 # 4) အောက်က cells တွေကို အစဉ်လိုက် run ပါ။
-# 5) နောက်ဆုံး cell ထွက်လာတဲ့ Cloudflare https://*.trycloudflare.com public URL ကိုဖွင့်ပါ။
+# 5) နောက်ဆုံး cell ထွက်လာတဲ့ Gradio https://xxxxx.gradio.live public URL ကိုဖွင့်ပါ။
 # 6) Gemini API key ကို UI > Open Settings ထဲမှာထည့်ပါ။ Transcript တစ်ခုလုံးကို batch အနည်းငယ်နဲ့ ဘာသာပြန်ပြီး local F5 Myanmar TTS နဲ့အသံထုတ်ပါမယ်။
 
 # =============================
@@ -24,8 +24,7 @@ if not APP_DIR.exists():
 else:
     print('Project folder already exists:', APP_DIR)
 
-assert (APP_DIR / 'custom_ui.py').exists(), 'GitHub repo ထဲမှာ custom_ui.py မတွေ့ပါ။'
-assert 'start_public_tunnel' in (APP_DIR / 'custom_ui.py').read_text(), 'Public-link v2 code မတွေ့ပါ။ GitHub folder အဟောင်းကိုဖျက်ပြီး clone ပြန်လုပ်ပါ။'
+assert (APP_DIR / 'app.py').exists(), 'GitHub repo ထဲမှာ app.py မတွေ့ပါ။'
 print('Project:', APP_DIR)
 
 # =============================
@@ -56,8 +55,8 @@ print('Project:', APP_DIR)
 # =============================
 # Custom UI ပွင့်လာပြီးမှ Gemini API key ကို UI ထဲမှာထည့်ပါ။
 %cd $APP_DIR
-# custom_ui.py downloads cloudflared and prints a https://*.trycloudflare.com public link
-!python custom_ui.py
+# Gradio share=True က temporary public URL ထုတ်ပေးပါမယ်
+!python app.py
 
 # =============================
 # UI အသုံးပြုပုံ

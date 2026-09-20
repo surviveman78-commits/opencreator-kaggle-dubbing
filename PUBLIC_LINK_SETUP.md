@@ -1,24 +1,28 @@
-# Kaggle Public Link Setup
+# Kaggle Public Link: Gradio Share
 
-Run the project from the cloned repository with `python custom_ui.py`. Do not use `app.py` for the custom interface.
+Run `app.py`, not `custom_ui.py`:
 
-The launcher first preloads Whisper and F5 Myanmar TTS. It then starts Flask on `0.0.0.0:7860`, downloads `cloudflared` if needed, and prints:
-
-```text
-PUBLIC LINK (open this URL): https://<random-name>.trycloudflare.com
+```python
+%cd /kaggle/working/opencreator-kaggle-dubbing
+!python app.py
 ```
 
-Open the `https://...trycloudflare.com` URL. The addresses printed by Flask, such as `127.0.0.1:7860` or `172.x.x.x:7860`, are internal notebook addresses and are not public links.
+The launcher uses `share=True` and prints a temporary public URL similar to:
 
-To verify that the correct version was cloned, run:
+```text
+https://random-name.gradio.live
+```
+
+Open the Gradio URL while the Kaggle process is running. If the browser is refreshed, the latest completed input/output artifacts are restored from `opencreator_runtime/job-*/`.
+
+To verify the correct version:
 
 ```python
 from pathlib import Path
-p = Path('/kaggle/working/opencreator-kaggle-dubbing/custom_ui.py').read_text()
-assert 'start_public_tunnel' in p
-assert 'trycloudflare.com' in p
-assert 'PUBLIC LINK (open this URL)' in p
-print('PUBLIC-LINK V2 OK')
+p = Path('/kaggle/working/opencreator-kaggle-dubbing/app.py').read_text()
+assert 'launch(share=True' in p
+assert 'restore_last_result' in p
+print('GRADIO SHARE V4 OK')
 ```
 
-If these assertions fail, Kaggle is using an old clone. Delete the old folder and clone the repository again, or upload the contents of this ZIP as a new GitHub commit.
+Do not use `127.0.0.1:7860`, `172.x.x.x:7860`, or the old Cloudflare Quick Tunnel launcher for this Kaggle workflow.
