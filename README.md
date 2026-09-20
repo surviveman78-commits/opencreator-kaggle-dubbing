@@ -22,7 +22,9 @@ In Kaggle Notebook Settings, select a GPU accelerator such as T4/P100 and enable
 
 In a Kaggle notebook cell:
 
-The copy/paste-ready GitHub clone, GPU check, FFmpeg install, Python dependency install, and launch cells are in [`cell.txt`](cell.txt). The launcher runs `custom_ui.py`, which downloads/loads Whisper and F5 TTS before the web page opens.
+The copy/paste-ready GitHub clone, GPU check, FFmpeg install, Python dependency install, and launch cells are in [`cell.txt`](cell.txt). The launcher runs `custom_ui.py`, which downloads/loads Whisper and F5 TTS before the web page opens. It also starts a Cloudflare Quick Tunnel and prints the external `https://*.trycloudflare.com` URL. Do not use the Flask internal `127.0.0.1:7860` or `172.x.x.x:7860` addresses, and do not launch the old `app.py` entrypoint for this custom UI.
+
+This package is **custom-ui-public-link-v2**. Confirm the correct GitHub copy with `VERSION.txt` and `PUBLIC_LINK_SETUP.md`, or search `custom_ui.py` for `start_public_tunnel`, `trycloudflare.com`, and `PUBLIC LINK (open this URL)`.
 
 The main interface is a custom Flask HTML/CSS/JavaScript UI, not the Gradio layout. It provides the video preview, Liquid Glass drag/resize blur box, session Gemini key field, male/female reference audio fields, progress bar, and final MP4 download.
 

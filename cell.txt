@@ -55,6 +55,7 @@ print('Project:', APP_DIR)
 # =============================
 # Custom UI ပွင့်လာပြီးမှ Gemini API key ကို UI ထဲမှာထည့်ပါ။
 %cd $APP_DIR
+# custom_ui.py downloads cloudflared and prints a https://*.trycloudflare.com public link
 !python custom_ui.py
 
 # =============================

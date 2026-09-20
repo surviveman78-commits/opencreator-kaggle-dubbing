@@ -1,0 +1,20 @@
+# Run this after cloning the repository
+from pathlib import Path
+APP_DIR = Path('/kaggle/working/opencreator-kaggle-dubbing')
+
+# If Kaggle already has the old folder, remove it before cloning again:
+!rm -rf /kaggle/working/opencreator-kaggle-dubbing
+!git clone --depth 1 --branch main https://github.com/surviveman78-commits/opencreator-kaggle-dubbing.git $APP_DIR
+
+p = (APP_DIR / 'custom_ui.py').read_text()
+assert 'start_public_tunnel' in p
+assert 'trycloudflare.com' in p
+assert 'PUBLIC LINK (open this URL)' in p
+print('PUBLIC-LINK V2 SOURCE OK')
+
+%cd $APP_DIR
+!python custom_ui.py
+
+# Wait for this exact line in the output:
+# PUBLIC LINK (open this URL): https://<random-name>.trycloudflare.com
+# Open that HTTPS URL. Do not open 127.0.0.1:7860 or 172.x.x.x:7860.

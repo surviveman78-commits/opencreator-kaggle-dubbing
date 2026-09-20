@@ -4,6 +4,11 @@ import json
 import os
 import threading
 import uuid
+import re
+import stat
+import subprocess
+import time
+import urllib.request
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template_string, request, send_from_directory
@@ -83,6 +88,27 @@ def download(job):
 def output(job):
     out=JOBS.get(job,{}).get('output'); return send_from_directory(Path(out).parent,Path(out).name) if out else ('Not ready',404)
 
+def start_public_tunnel(port: int):
+    if os.getenv('PUBLIC_LINK', 'cloudflared').lower() in ('0', 'false', 'off', 'none'):
+        print(f'Public tunnel disabled. Internal server: http://127.0.0.1:{port}')
+        return None
+    binary = Path(os.getenv('CLOUDFLARED_BIN', str(ROOT / 'cloudflared')))
+    if not binary.exists():
+        print('Downloading cloudflared tunnel client…')
+        urllib.request.urlretrieve('https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64', binary)
+        binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
+    proc = subprocess.Popen([str(binary), 'tunnel', '--no-autoupdate', '--url', f'http://127.0.0.1:{port}'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    pattern = re.compile(r'https://[-a-z0-9]+\.trycloudflare\.com')
+    deadline = time.time() + 45
+    while time.time() < deadline:
+        line = proc.stdout.readline() if proc.stdout else ''
+        match = pattern.search(line)
+        if match:
+            print('\nPUBLIC LINK (open this URL):', match.group(0), '\n', flush=True)
+            return proc
+    print('Cloudflared started, but the public URL was not detected. Check the tunnel log above.', flush=True)
+    return proc
+
 if __name__=='__main__':
     if os.getenv('OPENCREATOR_SKIP_PRELOAD') == '1':
         print('Preview mode: skipping model preload.')
@@ -90,4 +116,9 @@ if __name__=='__main__':
         print('Preloading local models before UI starts…')
         PIPE.preload_models('small')
         print('Models ready. Starting custom UI.')
-    app.run(host='0.0.0.0',port=int(os.getenv('PORT','7860')),debug=False)
+    port = int(os.getenv('PORT','7860'))
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False), daemon=True).start()
+    time.sleep(1)
+    start_public_tunnel(port)
+    while True:
+        time.sleep(60)
