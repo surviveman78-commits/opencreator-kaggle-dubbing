@@ -5,7 +5,7 @@
 # 2) Kaggle Notebook > Settings > Accelerator မှာ GPU (T4/P100) ရွေးပါ။
 # 3) Internet ကို On လုပ်ပါ။
 # 4) အောက်က cells တွေကို အစဉ်လိုက် run ပါ။
-# 5) နောက်ဆုံး cell ထွက်လာတဲ့ Gradio public URL ကိုဖွင့်ပါ။
+# 5) နောက်ဆုံး cell ထွက်လာတဲ့ Cloudflare https://*.trycloudflare.com public URL ကိုဖွင့်ပါ။
 # 6) Gemini API key ကို UI > Open Settings ထဲမှာထည့်ပါ။ Transcript တစ်ခုလုံးကို batch အနည်းငယ်နဲ့ ဘာသာပြန်ပြီး local F5 Myanmar TTS နဲ့အသံထုတ်ပါမယ်။
 
 # =============================
@@ -24,7 +24,8 @@ if not APP_DIR.exists():
 else:
     print('Project folder already exists:', APP_DIR)
 
-assert (APP_DIR / 'app.py').exists(), 'GitHub repo ထဲမှာ app.py မတွေ့ပါ။'
+assert (APP_DIR / 'custom_ui.py').exists(), 'GitHub repo ထဲမှာ custom_ui.py မတွေ့ပါ။'
+assert 'start_public_tunnel' in (APP_DIR / 'custom_ui.py').read_text(), 'Public-link v2 code မတွေ့ပါ။ GitHub folder အဟောင်းကိုဖျက်ပြီး clone ပြန်လုပ်ပါ။'
 print('Project:', APP_DIR)
 
 # =============================
@@ -67,7 +68,8 @@ print('Project:', APP_DIR)
 # 4) အောက်ညာဘက် glass handle နဲ့ ချုံ့/ချဲ့ပါ။
 # 5) ⚙ Open Settings ထဲမှာ Gemini/Groq key, custom font, subtitle color ရွေးပါ။
 # 6) Start Burmese Dubbing နှိပ်ပါ။ Translation က fixed Gemini batch ဖြစ်ပြီး TTS က fixed local F5 Myanmar TTS ဖြစ်ပါတယ်။
-# 7) Output video, dubbed audio, ASS subtitle, segments JSON ကို download လုပ်ပါ။
+# 7) Output video ကို preview ကြည့်ပြီး Download dubbed MP4 ကိုနှိပ်ပါ။
+# 8) Browser refresh လုပ်လည်း opencreator_runtime/jobs.json ရှိနေသရွေ့ နောက်ဆုံးအခြေအနေကိုပြန်တင်ပါမယ်။
 #
 # Final output video မှာ preview UI ရဲ့ glass border/handle/label မပါပါ။
 # User သတ်မှတ်ထားတဲ့ fixed blur rectangle နေရာမှာပဲ FFmpeg blur ထည့်ပါမယ်။

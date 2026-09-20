@@ -30,16 +30,18 @@ The main interface is a custom Flask HTML/CSS/JavaScript UI, not the Gradio layo
 
 Subtitle font behavior is explicit: when no font is uploaded, the renderer and preview use **Noto Sans Myanmar**. When a `.ttf` or `.otf` file is uploaded, it is loaded into the preview and becomes selectable in the font dropdown; the selected font is sent to the final render.
 
-Copy the files into `/kaggle/working/opencreator-kaggle-dubbing/`, then run:
+Copy the files into `/kaggle/working/opencreator-kaggle-dubbing/`, then run the custom launcher:
 
 ```python
 %cd /kaggle/working/opencreator-kaggle-dubbing
-!python app.py
+!python custom_ui.py
 ```
 
-The app uses `share=True`, so Gradio prints a temporary public URL. It only works while the Kaggle session remains alive. Do not share the link for personal-use data.
+The launcher prints a temporary Cloudflare Quick Tunnel URL. Open the `https://*.trycloudflare.com` URL, not the internal Flask addresses. It only works while the Kaggle session remains alive. Do not share the link for personal-use data.
 
 After uploading a video, click **Preview Box**. The app creates a short looping video preview, not a static image. Drag the red rectangle over the original subtitle and resize it from the bottom-right handle. There are no visible X/Y/Width/Height controls; the editor keeps the coordinates as hidden state. Open **Settings** to paste a Gemini or Groq key for this session; keys are kept only in the running Python process. Use the color pickers to select subtitle and outline colors.
+
+Job metadata is saved under `opencreator_runtime/jobs.json`. Refreshing the browser restores the most recent uploaded video, blur coordinates, progress state, and completed output preview when the runtime folder is still present. If the Kaggle process itself restarts, an in-progress job is marked as interrupted rather than shown as falsely running.
 
 ## Translation architecture and API keys
 
