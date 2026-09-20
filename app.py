@@ -152,7 +152,7 @@ def save_api_keys(gemini_key, groq_key):
     return "Session keys ready: " + (", ".join(saved) if saved else "none")
 
 
-def run_dubbing(file_value, url, output_ratio, voice_mode, subtitle_enabled, blur_enabled, blur_coordinates, blur_strength, font_file, font_name, font_size, font_color, outline_color, outline_width, keep_original, original_volume, provider, whisper_model, progress=gr.Progress()):
+def run_dubbing(file_value, url, output_ratio, voice_mode, subtitle_enabled, blur_enabled, blur_coordinates, blur_strength, font_file, font_name, font_size, font_color, outline_color, outline_width, keep_original, original_volume, provider, whisper_model, male_reference_audio, female_reference_audio, male_reference_text, female_reference_text, progress=gr.Progress()):
     source = get_video_path(file_value) or (url or "").strip()
     if not source:
         raise gr.Error("Upload a video or paste a public video URL.")
@@ -167,6 +167,8 @@ def run_dubbing(file_value, url, output_ratio, voice_mode, subtitle_enabled, blu
         outline_width=int(outline_width), default_voice=default_voice, male_voice="my-MM-ThihaNeural",
         female_voice="my-MM-NilarNeural", keep_original_audio=keep_original, original_audio_volume=float(original_volume),
         translation_provider=("gemini" if str(provider).lower().startswith("gemini") else ("auto" if str(provider).lower().startswith("auto") else str(provider).lower())), speaker_voice_map={},
+        tts_backend="local_f5", male_reference_audio=get_video_path(male_reference_audio) or "", female_reference_audio=get_video_path(female_reference_audio) or "",
+        male_reference_text=male_reference_text or "", female_reference_text=female_reference_text or "",
     )
     messages = []
     def on_progress(stage, percent, message):
@@ -191,21 +193,21 @@ def build_ui():
             with gr.Column(scale=1):
                 video = gr.File(label="1. Upload video", file_types=[".mp4", ".mov", ".mkv", ".webm"], type="filepath")
                 url = gr.Textbox(label="Or paste public video URL", placeholder="https://...")
-                output_ratio = gr.Radio(["original", "9:16", "16:9"], value="original", label="Output ratio")
-                voice_mode = gr.Radio(["male / သီဟ", "female / နီလာ"], value="male / သီဟ", label="Default voice")
-                provider = gr.Radio(["gemini / batch transcript", "groq", "auto", "local"], value="gemini / batch transcript", label="Translation backend")
-                whisper_model = gr.Dropdown(["tiny", "base", "small", "medium", "large-v3"], value="small", label="Whisper model")
+                output_ratio = gr.State("original")
+                voice_mode = gr.State("auto")
+                provider = gr.State("gemini")
+                whisper_model = gr.State("small")
             with gr.Column(scale=1):
                 blur_editor = gr.HTML("<div>Upload a video, then click Preview Box.</div>", label="2. Video preview — drag and resize the blur box")
-                preview_note = gr.Markdown("The preview is a short looping video. Drag the red box; resize from the bottom-right handle.")
+                preview_note = gr.Markdown("Preview is a short sample only; final output keeps the full video duration. Drag the Liquid Glass box and resize it.")
                 blur_strength = gr.Slider(1, 50, value=18, step=1, label="Blur strength")
                 preview_btn = gr.Button("Preview Box")
         blur_coordinates = gr.Textbox(value="", visible=False, elem_id="blur-coordinates")
         with gr.Accordion("⚙ Open Settings", open=False, elem_id="settings-panel"):
-            gr.Markdown("### Cloud API keys (this Kaggle session only)")
+            gr.Markdown("### Gemini API (this Kaggle session only)")
             with gr.Row():
                 gemini_key = gr.Textbox(label="Gemini API key", type="password", placeholder="Paste Gemini key")
-                groq_key = gr.Textbox(label="Groq API key", type="password", placeholder="Paste Groq key")
+                groq_key = gr.State("")
                 save_keys = gr.Button("Save keys")
             key_status = gr.Markdown("No cloud keys saved in this session.")
             gr.Markdown("Keys are stored only in this running Python process. They are not written to the repository.")
@@ -223,17 +225,24 @@ def build_ui():
                 outline_color = gr.ColorPicker(value="#000000", label="Outline color")
                 outline_width = gr.Slider(0, 12, value=3, step=1, label="Outline width")
                 original_volume = gr.Slider(0, 0.5, value=0.15, step=0.01, label="Original audio volume")
+            gr.Markdown("### Optional local F5 voice references")
+            with gr.Row():
+                male_reference_audio = gr.File(label="Male reference audio", file_types=[".wav", ".mp3", ".m4a"], type="filepath")
+                female_reference_audio = gr.File(label="Female reference audio", file_types=[".wav", ".mp3", ".m4a"], type="filepath")
+            with gr.Row():
+                male_reference_text = gr.Textbox(label="Male reference transcript", placeholder="Exact Burmese words in the male reference audio")
+                female_reference_text = gr.Textbox(label="Female reference transcript", placeholder="Exact Burmese words in the female reference audio")
         run_btn = gr.Button("3. Start Burmese Dubbing", variant="primary")
         with gr.Row():
             output_video = gr.Video(label="Burmese dubbed video")
-            output_audio = gr.Audio(label="Dubbed audio")
+            output_audio = gr.Audio(label="Dubbed audio", visible=False)
         with gr.Row():
-            output_subtitle = gr.File(label="Burmese ASS subtitle")
-            output_segments = gr.File(label="Segments JSON / review data")
-        logs = gr.Textbox(label="Workflow log", lines=12)
+            output_subtitle = gr.File(label="Burmese ASS subtitle", visible=False)
+            output_segments = gr.File(label="Segments JSON / review data", visible=False)
+        logs = gr.Textbox(label="Workflow log", lines=12, visible=False)
         preview_btn.click(frame_preview, [video, blur_coordinates, blur_strength], [blur_editor, preview_note])
         save_keys.click(save_api_keys, [gemini_key, groq_key], [key_status])
-        run_btn.click(run_dubbing, [video, url, output_ratio, voice_mode, subtitle_enabled, blur_enabled, blur_coordinates, blur_strength, font_file, font_name, font_size, font_color, outline_color, outline_width, keep_original, original_volume, provider, whisper_model], [output_video, output_audio, output_subtitle, output_segments, logs])
+        run_btn.click(run_dubbing, [video, url, output_ratio, voice_mode, subtitle_enabled, blur_enabled, blur_coordinates, blur_strength, font_file, font_name, font_size, font_color, outline_color, outline_width, keep_original, original_volume, provider, whisper_model, male_reference_audio, female_reference_audio, male_reference_text, female_reference_text], [output_video, output_audio, output_subtitle, output_segments, logs])
     return demo
 
 

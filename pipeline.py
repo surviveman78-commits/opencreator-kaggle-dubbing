@@ -52,6 +52,11 @@ class DubbingConfig:
     default_voice: str = "my-MM-ThihaNeural"
     voice_rate: str = "+0%"
     voice_pitch: str = "+0Hz"
+    tts_backend: str = "local_f5"
+    male_reference_audio: str = ""
+    female_reference_audio: str = ""
+    male_reference_text: str = ""
+    female_reference_text: str = ""
     keep_original_audio: bool = True
     original_audio_volume: float = 0.15
     max_duration_seconds: int = 900
@@ -73,6 +78,8 @@ class DubbingPipeline:
         self.progress = progress or (lambda stage, percent, message: None)
         self._local_tokenizer = None
         self._local_model = None
+        self._local_tts = None
+        self._whisper_models = {}
 
     def _emit(self, stage: str, percent: int, message: str) -> None:
         self.progress(stage, percent, message)
@@ -149,6 +156,13 @@ class DubbingPipeline:
             except OSError:
                 return False
 
+    def nvenc_available(self) -> bool:
+        try:
+            result = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True)
+            return result.returncode == 0 and "h264_nvenc" in result.stdout
+        except OSError:
+            return False
+
     def transcribe(self, audio: Path, job: Path, model_name: str = "small") -> list[Segment]:
         self._emit("transcribing", 22, f"Transcribing Chinese audio with faster-whisper ({model_name})")
         try:
@@ -158,13 +172,68 @@ class DubbingPipeline:
         device = "cuda" if self.cuda_available() else "cpu"
         compute = "float16" if device == "cuda" else "int8"
         self._emit("transcribing", 23, f"Whisper runtime: {device} / {compute}")
-        model = WhisperModel(model_name, device=device, compute_type=compute)
+        cache_key = f"{model_name}:{device}:{compute}"
+        model = self._whisper_models.get(cache_key)
+        if model is None:
+            model = WhisperModel(model_name, device=device, compute_type=compute)
+            self._whisper_models[cache_key] = model
         pieces, _info = model.transcribe(str(audio), language="zh", vad_filter=True, word_timestamps=False)
         segments = [Segment(float(s.start), float(s.end), s.text.strip()) for s in pieces if s.text.strip()]
         if not segments:
             raise PipelineError("No speech was detected in the video.")
+        self.assign_voice_by_pitch(audio, segments)
         self.save_segments(job, segments)
         return segments
+
+    def assign_voice_by_pitch(self, audio: Path, segments: list[Segment]) -> None:
+        """Fast heuristic routing: lower pitch -> Thiha, higher pitch -> Nilar.
+
+        This is intentionally lightweight and does not claim speaker diarization; it is
+        useful for the requested two-voice workflow and falls back to Thiha when pitch
+        cannot be estimated.
+        """
+        try:
+            import numpy as np
+            import soundfile as sf
+            samples, sample_rate = sf.read(str(audio), dtype="float32")
+            if samples.ndim > 1:
+                samples = samples.mean(axis=1)
+            for segment in segments:
+                start = max(0, int(segment.start * sample_rate))
+                end = min(len(samples), int(segment.end * sample_rate))
+                clip = samples[start:end]
+                if len(clip) < sample_rate // 5:
+                    continue
+                clip = clip[: min(len(clip), sample_rate * 2)]
+                clip = clip - float(np.mean(clip))
+                if float(np.max(np.abs(clip))) < 0.01:
+                    continue
+                frame = clip[: min(len(clip), 4096)]
+                min_lag = max(1, int(sample_rate / 350))
+                max_lag = min(len(frame) - 1, int(sample_rate / 70))
+                if max_lag <= min_lag:
+                    continue
+                corr = np.correlate(frame, frame, mode="full")[len(frame) - 1:]
+                lag = min_lag + int(np.argmax(corr[min_lag:max_lag]))
+                pitch = sample_rate / max(1, lag)
+                segment.gender = "female" if pitch >= 165 else "male"
+                segment.voice = "my-MM-NilarNeural" if segment.gender == "female" else "my-MM-ThihaNeural"
+        except Exception:
+            return
+
+    def preload_models(self, whisper_model: str = "small") -> None:
+        """Download/load local models before the UI starts."""
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as exc:
+            raise PipelineError("faster-whisper is not installed.") from exc
+        device = "cuda" if self.cuda_available() else "cpu"
+        compute = "float16" if device == "cuda" else "int8"
+        self._emit("preload", 20, f"Loading Whisper {whisper_model} ({device}/{compute})")
+        self._whisper_models[f"{whisper_model}:{device}:{compute}"] = WhisperModel(whisper_model, device=device, compute_type=compute)
+        self._emit("preload", 65, "Loading Burmese F5 TTS model")
+        self._load_local_tts()
+        self._emit("preload", 100, "Models ready; UI can start")
 
     def _load_local_translator(self, config: DubbingConfig):
         if self._local_model is not None and self._local_tokenizer is not None:
@@ -319,8 +388,66 @@ class DubbingPipeline:
         communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
         await communicate.save(str(output))
 
+    def _load_local_tts(self):
+        if self._local_tts is not None:
+            return self._local_tts
+        try:
+            from f5_myanmar_tts import MyanmarTTS
+        except ImportError as exc:
+            raise PipelineError("Local Burmese TTS is not installed. Install f5-myanmar-tts from requirements.txt.") from exc
+        self._emit("tts", 52, "Loading local F5 Myanmar TTS on GPU")
+        try:
+            self._local_tts = MyanmarTTS()
+        except Exception as exc:
+            raise PipelineError(f"Could not load local F5 Myanmar TTS: {exc}") from exc
+        return self._local_tts
+
+    def _local_tts_one(self, tts, text: str, output: Path, reference_audio: str = "", reference_text: str = "") -> None:
+        kwargs = {"text": text, "output_file": str(output)}
+        if reference_audio:
+            kwargs["ref_audio"] = reference_audio
+            if reference_text:
+                kwargs["ref_text"] = reference_text
+        tts.speak(**kwargs)
+
+    def _make_original_voice_references(self, segments: list[Segment], job: Path, config: DubbingConfig) -> None:
+        """Extract short voice samples from the original video audio automatically."""
+        source_audio = job / "audio" / "source.wav"
+        if not source_audio.exists():
+            return
+        for gender, field_name in (("male", "male_reference_audio"), ("female", "female_reference_audio")):
+            if getattr(config, field_name):
+                continue
+            candidate = next((s for s in segments if s.gender == gender and s.end - s.start >= 0.8), None)
+            if candidate is None:
+                continue
+            out = job / "audio" / f"original-{gender}-reference.wav"
+            start = max(0.0, candidate.start)
+            duration = min(6.0, max(1.2, candidate.end - candidate.start))
+            try:
+                self._run(["ffmpeg", "-y", "-ss", str(start), "-t", str(duration), "-i", str(source_audio), "-ar", "24000", "-ac", "1", str(out)])
+                setattr(config, field_name, str(out))
+            except PipelineError:
+                continue
+
     def make_tts(self, segments: list[Segment], job: Path, config: DubbingConfig) -> list[Segment]:
         self._emit("tts", 52, "Generating Burmese voice segments with Thiha/Nilar")
+        if config.tts_backend == "local_f5":
+            tts = self._load_local_tts()
+            self._make_original_voice_references(segments, job, config)
+            for index, segment in enumerate(segments):
+                segment.voice = self.choose_voice(segment, config)
+                if not segment.translated_text:
+                    raise PipelineError(f"Segment {index + 1} has no translated text.")
+                is_female = segment.voice == config.female_voice
+                reference_audio = config.female_reference_audio if is_female else config.male_reference_audio
+                reference_text = config.female_reference_text if is_female else config.male_reference_text
+                out = job / "tts" / f"segment-{index:04d}.wav"
+                self._local_tts_one(tts, segment.translated_text, out, reference_audio, reference_text)
+                segment.audio_path = str(out)
+                self._emit("tts", 52 + int(18 * (index + 1) / len(segments)), f"Generated local voice {index + 1}/{len(segments)}")
+            self.save_segments(job, segments)
+            return segments
         try:
             import edge_tts  # noqa: F401
         except ImportError as exc:
@@ -363,14 +490,42 @@ class DubbingPipeline:
         self._emit("mixing", 78, "Aligning Burmese voice segments and mixing audio")
         self._require("ffmpeg")
         dubbed = job / "renders" / "dubbed-audio.m4a"
+        if self.cuda_available():
+            try:
+                import numpy as np
+                import soundfile as sf
+                import torch
+                sample_rate = 48000
+                duration = max(self.probe(video)["duration"], max((s.end for s in segments), default=0.0))
+                mix = torch.zeros(int(duration * sample_rate) + sample_rate, dtype=torch.float32, device="cuda")
+                self._emit("mixing", 79, f"CUDA audio assembly on {torch.cuda.get_device_name(0)}")
+                for index, segment in enumerate(segments):
+                    wav = job / "audio" / f"tts-{index:04d}.wav"
+                    self._run(["ffmpeg", "-y", "-i", segment.audio_path, "-ar", str(sample_rate), "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
+                    samples, rate = sf.read(str(wav), dtype="float32")
+                    if samples.ndim > 1:
+                        samples = samples.mean(axis=1)
+                    clip = torch.from_numpy(np.asarray(samples, dtype=np.float32)).to("cuda")
+                    start = max(0, int(round(segment.start * sample_rate)))
+                    end = min(mix.numel(), start + clip.numel())
+                    if end > start:
+                        mix[start:end] += clip[:end - start]
+                    self._emit("mixing", 79 + int(8 * (index + 1) / len(segments)), f"CUDA mixed voice {index + 1}/{len(segments)}")
+                mix = torch.clamp(mix, -1.0, 1.0).detach().cpu().numpy()
+                mixed_wav = job / "audio" / "cuda-mixed.wav"
+                sf.write(str(mixed_wav), mix, sample_rate, subtype="PCM_16")
+                self._run(["ffmpeg", "-y", "-i", str(mixed_wav), "-c:a", "aac", "-b:a", "192k", str(dubbed)])
+                return dubbed
+            except Exception as exc:
+                self._emit("mixing", 78, f"CUDA audio path unavailable; using FFmpeg fallback: {exc}")
         inputs: list[str] = []
         filters: list[str] = []
         for i, segment in enumerate(segments):
             inputs += ["-i", segment.audio_path]
             delay = max(0, int(segment.start * 1000))
-            filters.append(f"[{i}:a]adelay={delay}|{delay},apad[a{i}]")
+            filters.append(f"[{i}:a]adelay={delay}:all=1[a{i}]")
         labels = "".join(f"[a{i}]" for i in range(len(segments)))
-        filters.append(f"{labels}amix=inputs={len(segments)}:duration=longest:dropout_transition=0,dynaudnorm[dub]")
+        filters.append(f"{labels}amix=inputs={len(segments)}:duration=longest:dropout_transition=0:normalize=0[dub]")
         self._run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(filters), "-map", "[dub]", "-c:a", "aac", "-b:a", "192k", str(dubbed)])
         return dubbed
 
@@ -396,7 +551,10 @@ class DubbingPipeline:
             cmd += ["-filter_complex", f"[0:a]volume={config.original_audio_volume}[orig];[1:a]volume=1[dub];[orig][dub]amix=inputs=2:duration=longest:dropout_transition=2[aout]", "-map", "0:v", "-map", "[aout]"]
         else:
             cmd += ["-map", "0:v", "-map", "1:a"]
-        cmd += ["-vf", video_filter, "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output)]
+        if self.nvenc_available():
+            cmd += ["-vf", video_filter, "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "21", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output)]
+        else:
+            cmd += ["-vf", video_filter, "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output)]
         self._run(cmd)
         self._emit("done", 100, f"Completed: {output.name}")
         return output

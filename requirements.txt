@@ -1,9 +1,12 @@
 gradio>=5.0,<6
+flask>=3.0.0
 faster-whisper>=1.1.0
 edge-tts>=7.0.0
+f5-myanmar-tts>=0.2.0
 requests>=2.32.0
 Pillow>=10.0.0
 numpy>=1.26.0
+soundfile>=0.12.1
 google-genai>=1.0.0
 # Optional only if the UI provider is set to local:
 # transformers>=4.45.0

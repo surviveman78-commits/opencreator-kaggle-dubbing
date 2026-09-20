@@ -7,7 +7,7 @@ This is a Kaggle-friendly personal-use MVP inspired by OpenCreator's staged crea
 - Accepts a local video upload or a public video URL.
 - Extracts audio and transcribes Chinese speech with `faster-whisper`.
 - Extracts a transcript first, then translates numbered transcript batches with Gemini instead of making one API call per segment.
-- Generates Burmese speech through Microsoft Edge voices `my-MM-ThihaNeural` (သီဟ) and `my-MM-NilarNeural` (နီလာ).
+- Generates Burmese speech locally with F5 Myanmar TTS on the Kaggle GPU; optional male/female reference recordings can guide the two voices. Microsoft Edge voices remain available only as a fallback code path.
 - Aligns each generated segment to the original timestamps.
 - Renders Burmese ASS subtitles.
 - Applies a draggable/resizable user-defined blur box over burned-in original subtitles.
@@ -22,7 +22,11 @@ In Kaggle Notebook Settings, select a GPU accelerator such as T4/P100 and enable
 
 In a Kaggle notebook cell:
 
-The copy/paste-ready GitHub clone, GPU check, FFmpeg install, Python dependency install, and launch cells are in [`cell.txt`](cell.txt). Replace its `REPO_URL` placeholder with the public GitHub repository URL.
+The copy/paste-ready GitHub clone, GPU check, FFmpeg install, Python dependency install, and launch cells are in [`cell.txt`](cell.txt). The launcher runs `custom_ui.py`, which downloads/loads Whisper and F5 TTS before the web page opens.
+
+The main interface is a custom Flask HTML/CSS/JavaScript UI, not the Gradio layout. It provides the video preview, Liquid Glass drag/resize blur box, session Gemini key field, male/female reference audio fields, progress bar, and final MP4 download.
+
+Subtitle font behavior is explicit: when no font is uploaded, the renderer and preview use **Noto Sans Myanmar**. When a `.ttf` or `.otf` file is uploaded, it is loaded into the preview and becomes selectable in the font dropdown; the selected font is sent to the final render.
 
 Copy the files into `/kaggle/working/opencreator-kaggle-dubbing/`, then run:
 
@@ -41,7 +45,7 @@ The default `gemini / batch transcript` mode sends numbered transcript batches t
 
 API keys are intentionally not required in the notebook cells. Open the running app's **Open Settings** section, paste the Gemini key, and click **Save keys**. The key is stored only in the running Python process for that Kaggle session and is not written to the repository.
 
-The audio path is timestamp-preserving: the source video is converted to mono 16 kHz audio, Whisper creates timed Chinese segments, Gemini returns one Burmese line per segment, Edge TTS creates a voice clip for each line, and FFmpeg delays/mixes each clip at its original segment start time before rendering the final MP4.
+The audio path is timestamp-preserving: the source video is converted to mono 16 kHz audio, Whisper creates timed Chinese segments, Gemini returns one Burmese line per segment, local F5 TTS creates voice clips, and CUDA/FFmpeg delays and mixes each clip at its original segment start time before rendering the final MP4. The renderer does not downscale the original video; it keeps its original resolution and aspect ratio.
 
 ```python
 # API keys are entered in the UI, not in this file.
@@ -51,7 +55,7 @@ The audio path is timestamp-preserving: the source video is converted to mono 16
 
 ## Important limitation in this first code drop
 
-The pipeline has the voice-routing hook for male/female segments and speaker mappings, but the first UI does not yet run automatic gender diarization. Transcription segments default to the male voice unless a segment's `gender` or a speaker map is populated. The next implementation step should add a diarization/gender review panel and allow editing the generated `segments.json` before TTS.
+The pipeline performs lightweight pitch-based routing for the requested two-voice workflow: lower-pitched segments use Microsoft `my-MM-ThihaNeural`, and higher-pitched segments use `my-MM-NilarNeural`. This is a heuristic rather than full speaker diarization, so ambiguous or overlapping speech may still need review.
 
 The blur box is draggable in the preview and currently applies one fixed rectangle to the whole video. A later revision can add per-scene/keyframe boxes for videos where subtitle position changes.
 
